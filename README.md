@@ -88,7 +88,7 @@ With everything configured, you can now run the full-stack application.
 
 1.  **Start the Backend Server:** Make sure you are in the `backend/` directory and run the Flask app. This will start a local server at `http://127.0.0.1:5000`.
     
-        flask run
+        python -m flask run
         
     
 2.  **Open the Frontend:** Open the `frontend/index.html` file directly in your web browser. The frontend will automatically communicate with the backend server you just started.
