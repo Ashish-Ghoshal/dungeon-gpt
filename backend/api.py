@@ -2,7 +2,8 @@ import os
 import json
 import logging
 from flask import Flask, jsonify, request
-from .llm import get_gemini_response, get_huggingface_response, get_local_model_response
+# Import the new functions from the updated llm.py
+from .llm import get_gemini_censored_response, get_gemini_uncensored_response, get_local_llm_response, llm
 
 # Set up logging for the API module
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -10,8 +11,6 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 def create_api_blueprint(app: Flask):
     """
     Creates and registers a blueprint for the API routes.
-    
-    This modular approach keeps the main app.py clean.
     """
     from flask import Blueprint
     api_blueprint = Blueprint('api', __name__)
@@ -20,33 +19,36 @@ def create_api_blueprint(app: Flask):
     def generate_story():
         """
         Handles the story generation request from the frontend.
-        
-        It now accepts conversation history and settings, passing them to the appropriate model function.
         """
         try:
             data = request.get_json()
             history = data.get('history', [])
             mode = data.get('mode', 'censored')
-            settings = data.get('settings', {'tone': 'Fantasy', 'genre': 'Adventure'})
+            settings = data.get('settings', {'tone': 'Fantasy'})
 
             if not history:
                 return jsonify({'error': 'No conversation history provided.'}), 400
 
             logging.info(f"Received request for '{mode}' mode with history of {len(history)} turns.")
 
-            # Dual-Mode Logic
-            if mode == 'uncensored':
-                is_local = os.getenv("IS_LOCAL_DEV", "false").lower() == "true"
-                
-                if is_local and os.path.exists("./models/"):
-                    logging.info("Using local model logic.")
-                    response_text = get_local_model_response(history, settings)
+            response_text = ""
+            if mode == 'censored':
+                logging.info("Using Gemini API for 'censored' mode.")
+                response_text = get_gemini_censored_response(history, settings)
+            elif mode == 'uncensored':
+                # Check if the local model is loaded. If so, use it.
+                if llm is not None:
+                    print("Using local model for uncensored mode.")
+                    response_text = get_local_llm_response(history, settings)
                 else:
-                    logging.info("Using Hugging Face cloud model logic.")
-                    response_text = get_huggingface_response(history, settings)
-            else: # mode == 'censored'
-                logging.info("Using Gemini API logic.")
-                response_text = get_gemini_response(history, settings)
+                    # If the local model is not loaded (e.g., in a deployed environment), use the Gemini fallback.
+                    print("Local model not available. Using Gemini API as a fallback.")
+                    response_text = get_gemini_uncensored_response(history, settings)
+            else:
+                return jsonify({'error': 'Invalid mode specified.'}), 400
+
+            if "Error" in response_text:
+                return jsonify({'error': response_text}), 500
 
             return jsonify({'response': response_text}), 200
 

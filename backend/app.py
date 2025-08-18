@@ -13,13 +13,14 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 # Get the directory where this script is located
 base_dir = os.path.dirname(os.path.abspath(__file__))
+# The frontend directory is the parent of the backend directory
 frontend_dir = os.path.join(base_dir, '..', 'frontend')
 
 def create_app():
     """
     Factory function to create the Flask application instance.
     """
-    app = Flask(__name__, static_folder=os.path.join(frontend_dir, 'static'))
+    app = Flask(__name__)
     
     # Enable CORS for the frontend
     CORS(app)
@@ -40,11 +41,10 @@ def create_app():
         """
         Serves other static files (like JS and CSS) from the frontend directory.
         """
+        if path.startswith('static/'):
+            return send_from_directory(os.path.join(frontend_dir, 'static'), path[7:])
         return send_from_directory(frontend_dir, path)
     
-    # Configure the app to read API keys from environment variables
-    # This is handled automatically by the `os.getenv` calls in llm.py
-
     logging.info("Flask application created and configured.")
     return app
 

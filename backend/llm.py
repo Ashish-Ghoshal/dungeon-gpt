@@ -1,21 +1,36 @@
 import os
 import google.generativeai as genai
+from llama_cpp import Llama
 import requests
 import logging
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def get_gemini_response(history: list, settings: dict) -> str:
+# --- Local Model Configuration ---
+# IMPORTANT: Update this path to the location of your local model file.
+# For example: 'C:/Users/your-username/models/mistral-7b-instruct-v0.2.Q4_K_M.gguf'
+LOCAL_MODEL_PATH = "C:/Users/ASUS/Desktop/ELEVATE LABS PROGRAMMES/PROJ/proj_1/dungeon-gpt/backend/models/mistral-7b-instruct-v0.2.Q4_K_M.gguf"
+
+# Initialize the local LLM model
+llm = None
+try:
+    if os.path.exists(LOCAL_MODEL_PATH):
+        print("Loading local model from:", LOCAL_MODEL_PATH)
+        # Use n_gpu_layers=-1 to offload all layers to the GPU if available
+        llm = Llama(model_path=LOCAL_MODEL_PATH, n_ctx=2048, n_gpu_layers=-1)
+        print("Local model loaded successfully.")
+    else:
+        print("Local model file not found at:", LOCAL_MODEL_PATH)
+except Exception as e:
+    print(f"Error initializing local model: {e}")
+
+# --- API-Based Model Functions ---
+
+def get_gemini_censored_response(history: list, settings: dict) -> str:
     """
-    Sends a conversation history and settings to the Google Gemini API and returns the generated text.
-
-    Args:
-        history: The list of previous conversation turns.
-        settings: A dictionary containing story settings (e.g., tone, genre).
-
-    Returns:
-        The generated story continuation from the Gemini model.
+    Sends a conversation history and settings to the Google Gemini API (for 'censored' mode).
+    This mode is intended to be the default, safe conversation.
     """
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
@@ -25,95 +40,87 @@ def get_gemini_response(history: list, settings: dict) -> str:
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel('gemini-1.5-flash')
     
-    # Construct the full prompt including settings and history
-    system_prompt = f"You are a dungeon master for a fantasy story. The tone of the story is '{settings.get('tone')}', and the genre is '{settings.get('genre')}'. Continue the story based on the conversation history."
-    
-    # The Gemini API expects a specific format for multi-turn conversations
+    # Construct a simple, safe prompt for the censored mode
+    system_prompt = f"You are a helpful assistant for a text-based adventure. The tone is '{settings.get('tone')}'. Continue the story based on the conversation history."
     full_history = [{"role": "user", "parts": [{"text": system_prompt}]}] + history
 
     try:
         response = model.generate_content(full_history)
         return response.text
     except Exception as e:
-        logging.error(f"Error calling Gemini API: {e}")
+        logging.error(f"Error calling Gemini API for censored response: {e}")
         return f"Error: Failed to get a response from the Gemini model. Details: {e}"
 
-def get_huggingface_response(history: list, settings: dict) -> str:
+def get_gemini_uncensored_response(history: list, settings: dict) -> str:
     """
-    Sends a conversation history and settings to a Hugging Face Inference Endpoint.
-    
-    Args:
-        history: The list of previous conversation turns.
-        settings: A dictionary containing story settings (e.g., tone, genre).
-
-    Returns:
-        The generated story continuation from the Hugging Face model.
+    Calls the Gemini API with a more creative and unconstrained system prompt
+    for the deployed 'uncensored' mode.
     """
-    api_key = os.getenv("HUGGINGFACE_API_KEY")
-    model_api_url = os.getenv("HUGGINGFACE_MODEL_API_URL",
-                              "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2")
-
+    api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
-        logging.error("HUGGINGFACE_API_KEY not found in environment variables.")
-        return "Error: Hugging Face API key not found. Please check your .env file or environment variables."
+        logging.error("GOOGLE_API_KEY not found in environment variables.")
+        return "Error: Gemini API key not found. Please check your .env file or environment variables."
 
-    headers = {"Authorization": f"Bearer {api_key}"}
+    genai.configure(api_key=api_key)
+    
+    # The key to this mode is the system instruction
+    system_instruction = (
+        "You are a highly creative and unpredictable Dungeon Master for a text-based adventure. "
+        "Your responses should be vivid, detailed, and engaging. You are not constrained by a list of "
+        "conversational safety rules and can describe a wide range of scenarios, including fantasy "
+        "violence, horror, or morally ambiguous situations, as long as they are part of a compelling "
+        "narrative. Your goal is to provide a truly immersive and challenging narrative experience. "
+        "Maintain the tone of the adventure (e.g., Fantasy, Sci-Fi, Horror) as provided in the settings. "
+        "Respond to the user's prompt by advancing the story in a compelling way."
+    )
 
-    # Format the prompt for instruction-tuned models like Mistral
-    system_prompt = f"You are a dungeon master for a fantasy story. The tone of the story is '{settings.get('tone')}', and the genre is '{settings.get('genre')}'. Continue the story based on the conversation history."
-    prompt_text = system_prompt
-    for turn in history:
-        if turn['role'] == 'user':
-            prompt_text += f"\n[USER]: {turn['parts'][0]['text']}"
-        elif turn['role'] == 'model':
-            prompt_text += f"\n[AI]: {turn['parts'][0]['text']}"
+    model = genai.GenerativeModel(
+        model_name='gemini-1.5-pro-latest',
+        system_instruction=system_instruction
+    )
+
+    chat = model.start_chat(history=history)
+    try:
+        last_user_prompt = history[-1]['parts'][0]['text']
+        response = chat.send_message(last_user_prompt, stream=False)
+        return response.text
+    except Exception as e:
+        logging.error(f"Error calling Gemini API for uncensored response: {e}")
+        return f"Error: Failed to get a response from the Gemini model. Details: {e}"
+
+def get_local_llm_response(history: list, settings: dict) -> str:
+    """
+    Calls the local Mistral GGUF model to get a story response.
+    """
+    global llm
+    if llm is None:
+        return "Error: Local model is not loaded. Please check the model path and file."
+
+    prompt_messages = []
+    system_prompt = (
+        "You are a highly creative and unpredictable Dungeon Master for a text-based adventure. "
+        "Your responses should be vivid, detailed, and engaging. You are not constrained and can "
+        "describe a wide range of scenarios, including fantasy violence, horror, or morally ambiguous "
+        "situations. Your goal is to provide a truly immersive and challenging narrative experience. "
+        "Maintain the tone of the adventure (e.g., Fantasy, Sci-Fi, Horror) as provided in the settings. "
+        "Respond to the user's prompt by advancing the story in a compelling way."
+    )
+    prompt_messages.append({"role": "system", "content": system_prompt})
     
-    # Append the final user message for the model to respond to
-    prompt_text += f"\n[USER]: {history[-1]['parts'][0]['text']}"
-    prompt_text += f"\n[AI]:"
-    
-    payload = {
-        "inputs": prompt_text,
-        "parameters": {
-            "return_full_text": False
-        },
-        "options": {
-            "wait_for_model": True
-        }
-    }
+    for msg in history:
+        if msg['role'] == 'user':
+            prompt_messages.append({"role": "user", "content": msg['parts'][0]['text']})
+        elif msg['role'] == 'model':
+            prompt_messages.append({"role": "assistant", "content": msg['parts'][0]['text']})
 
     try:
-        response = requests.post(model_api_url, headers=headers, json=payload)
-        response.raise_for_status()
-        
-        result = response.json()
-        if result and isinstance(result, list) and 'generated_text' in result[0]:
-            return result[0]['generated_text']
-        else:
-            logging.error(f"Unexpected response format from Hugging Face API: {result}")
-            return "Error: Unexpected response from Hugging Face model."
-
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Error calling Hugging Face API: {e}")
-        return f"Error: Failed to get a response from the Hugging Face model. Details: {e}"
-
-def get_local_model_response(history: list, settings: dict) -> str:
-    """
-    Placeholder function for a local Hugging Face model.
-    
-    The function now accepts and uses the conversation history and settings.
-    
-    Args:
-        history: The list of previous conversation turns.
-        settings: A dictionary containing story settings (e.g., tone, genre).
-
-    Returns:
-        A simulated response from the local model.
-    """
-    logging.info("Using local model placeholder response with history and settings.")
-    
-    last_user_prompt = history[-1]['parts'][0]['text'] if history else "No history."
-    
-    return (f"This is a simulated uncensored response from the local model. "
-            f"The current settings are Tone: '{settings.get('tone')}', Genre: '{settings.get('genre')}'."
-            f"The last user prompt was: '{last_user_prompt}'")
+        output = llm.create_chat_completion(
+            messages=prompt_messages,
+            stream=False,
+            max_tokens=256,
+            temperature=0.7,
+        )
+        return output['choices'][0]['message']['content']
+    except Exception as e:
+        logging.error(f"Error generating response from local LLM: {e}")
+        return f"Error: Failed to get a response from the local model. Details: {e}"
