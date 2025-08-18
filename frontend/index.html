@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dungeon GPT</title>
+    <!-- Inter font from Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d1117;
+            color: #c9d1d9;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        /* Custom scrollbar for chat history */
+        .chat-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .chat-container::-webkit-scrollbar-thumb {
+            background-color: #444c56;
+            border-radius: 4px;
+        }
+
+        .chat-container::-webkit-scrollbar-track {
+            background-color: #161b22;
+        }
+
+        /* Message box styling */
+        .message-box {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <div id="root" class="flex flex-col h-screen w-full max-w-4xl mx-auto p-4 antialiased">
+        <!-- The app will render here -->
+    </div>
+
+    <!-- React and ReactDOM from CDN -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <script type="module">
+        // Import Firebase functions directly to avoid reference errors
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+        import { getFirestore, doc, getDoc, addDoc, collection } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+    
+        // The Firebase configuration for the app.
+        // In the Canvas environment, this will be provided by a global variable.
+        // For local development, you MUST replace the placeholder below with your own config.
+        const providedFirebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            // PASTE YOUR FIREBASE CONFIGURATION OBJECT HERE
+            apiKey: "AIzaSyAsXHDs6vzPsVIeGqbMO_Umk9ghThLDAGw",
+            authDomain: "dungeon-gpt.firebaseapp.com",
+            projectId: "dungeon-gpt",
+            storageBucket: "dungeon-gpt.firebasestorage.app",
+            messagingSenderId: "860852884563",
+            appId: "1:860852884563:web:fa4691c0d2604e9a2522a6",
+            measurementId: "G-KZ1GDHFEE7"
+        };
+        const firebaseConfig = providedFirebaseConfig;
+
+        // The app ID and initial auth token are provided by the Canvas environment.
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // Set up Firebase outside the component to avoid re-initialization
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // This is a self-contained, transpiled React component.
+        const e = React.createElement;
+
+        // Component to handle modal pop-ups for alerts and prompts
+        const Modal = ({ title, message, onClose, input, onConfirm }) => {
+            const [inputValue, setInputValue] = React.useState('');
+            const inputRef = React.useRef(null);
+
+            React.useEffect(() => {
+                if (input && inputRef.current) {
+                    inputRef.current.focus();
+                }
+            }, [input]);
+
+            const handleConfirm = () => {
+                if (onConfirm) {
+                    onConfirm(inputValue);
+                }
+                onClose();
+            };
+
+            return e('div', { className: 'fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50' },
+                e('div', { className: 'bg-gray-800 p-6 rounded-lg shadow-xl max-w-sm w-full border border-gray-700' },
+                    e('h2', { className: 'text-xl font-bold mb-2' }, title),
+                    e('p', { className: 'text-gray-300 mb-4' }, message),
+                    input && e('input', {
+                        ref: inputRef,
+                        type: 'text',
+                        className: 'w-full p-2 rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4',
+                        value: inputValue,
+                        onChange: (event) => setInputValue(event.target.value),
+                        onKeyDown: (event) => {
+                            if (event.key === 'Enter') {
+                                handleConfirm();
+                            }
+                        }
+                    }),
+                    e('div', { className: 'flex justify-end space-x-2' },
+                        input && e('button', {
+                            className: 'px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors',
+                            onClick: handleConfirm
+                        }, 'Confirm'),
+                        e('button', {
+                            className: 'px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors',
+                            onClick: onClose
+                        }, 'Close')
+                    )
+                )
+            );
+        };
+        
+        // Main application component
+        const App = () => {
+            const [history, setHistory] = React.useState([]);
+            const [prompt, setPrompt] = React.useState('');
+            const [isLoading, setIsLoading] = React.useState(false);
+            const [mode, setMode] = React.useState('censored');
+            const [settings, setSettings] = React.useState({ tone: 'Fantasy' });
+            const [userId, setUserId] = React.useState(null);
+            const [isAuthReady, setIsAuthReady] = React.useState(false);
+            const [modal, setModal] = React.useState({ show: false, title: '', message: '', input: false, onConfirm: null });
+            
+            const chatContainerRef = React.useRef(null);
+
+            React.useEffect(() => {
+                console.log("Setting up Firebase authentication listener...");
+                const unsubscribe = onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        console.log("Authentication state changed: User is signed in with UID:", user.uid);
+                        setUserId(user.uid);
+                    } else {
+                        console.log("Authentication state changed: User is not signed in. Attempting to sign in...");
+                        try {
+                            if (initialAuthToken) {
+                                await signInWithCustomToken(auth, initialAuthToken);
+                            } else {
+                                await signInAnonymously(auth);
+                            }
+                        } catch (error) {
+                            console.error("Authentication failed during sign-in attempt:", error);
+                        }
+                    }
+                    setIsAuthReady(true);
+                });
+                return () => unsubscribe();
+            }, []);
+
+            React.useEffect(() => {
+                if (chatContainerRef.current) {
+                    chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+                }
+            }, [history]);
+
+            const handleSendMessage = async () => {
+                if (!prompt.trim() || isLoading) return;
+
+                setIsLoading(true);
+
+                const newUserMessage = {
+                    role: 'user',
+                    text: prompt
+                };
+
+                const newHistory = [...history, newUserMessage];
+                setHistory(newHistory);
+                setPrompt('');
+
+                const conversationForApi = newHistory.map(msg => ({
+                    role: msg.role === 'user' ? 'user' : 'model',
+                    parts: [{ text: msg.text }]
+                }));
+
+                try {
+                    const isLocalDev = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+                    const baseUrl = isLocalDev ? 'http://127.0.0.1:5000' : 'https://your-deployed-backend-url.com';
+
+                    const response = await fetch(`${baseUrl}/api/generate`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            history: conversationForApi,
+                            mode,
+                            settings,
+                        }),
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        const newAiMessage = { role: 'model', text: data.response };
+                        setHistory(prevHistory => [...prevHistory, newAiMessage]);
+                    } else {
+                        setModal({ show: true, title: 'API Error', message: data.error });
+                        setHistory(prevHistory => [...prevHistory, { role: 'model', text: `Error: ${data.error}` }]);
+                    }
+                } catch (error) {
+                    setModal({ show: true, title: 'Network Error', message: 'Failed to connect to the backend. Please check the server.' });
+                    setHistory(prevHistory => [...prevHistory, { role: 'model', text: 'Error: Failed to get a response. Network or server issue.' }]);
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+            
+            const saveStoryToFirestore = async () => {
+                if (!isAuthReady || !userId) {
+                    setModal({ show: true, title: 'Authentication Error', message: 'User not authenticated. Please try again.' });
+                    return;
+                }
+                if (history.length === 0) {
+                    setModal({ show: true, title: 'Empty Story', message: 'There is no story to save.' });
+                    return;
+                }
+                setIsLoading(true);
+                try {
+                    const storiesRef = collection(db, `artifacts/${appId}/users/${userId}/stories`);
+                    const newDocRef = await addDoc(storiesRef, {
+                        history: history,
+                        settings: settings,
+                        mode: mode,
+                        createdAt: new Date(),
+                    });
+                    setModal({ show: true, title: 'Story Saved', message: `Story saved with ID: ${newDocRef.id}` });
+                } catch (error) {
+                    setModal({ show: true, title: 'Save Error', message: `Failed to save story: ${error.message}` });
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            const loadStoryFromFirestore = () => {
+                setModal({
+                    show: true,
+                    title: 'Load Story',
+                    message: 'Enter the Story ID to load:',
+                    input: true,
+                    onConfirm: async (storyId) => {
+                        if (!storyId) return;
+
+                        if (!isAuthReady || !userId) {
+                            setModal({ show: true, title: 'Authentication Error', message: 'User not authenticated. Please try again.' });
+                            return;
+                        }
+
+                        setIsLoading(true);
+                        try {
+                            const storyRef = doc(db, `artifacts/${appId}/users/${userId}/stories`, storyId);
+                            const storySnap = await getDoc(storyRef);
+
+                            if (storySnap.exists()) {
+                                const loadedStory = storySnap.data();
+                                setHistory(loadedStory.history || []);
+                                setSettings(loadedStory.settings || { tone: 'Fantasy' });
+                                setMode(loadedStory.mode || 'censored');
+                                setModal({ show: true, title: 'Story Loaded', message: `Story "${storyId}" loaded successfully.` });
+                            } else {
+                                setModal({ show: true, title: 'Not Found', message: `No story found with ID: ${storyId}` });
+                            }
+                        } catch (error) {
+                            setModal({ show: true, title: 'Load Error', message: `Failed to load story: ${error.message}` });
+                        } finally {
+                            setIsLoading(false);
+                        }
+                    }
+                });
+            };
+
+            const newStory = () => {
+                setHistory([]);
+                setSettings({ tone: 'Fantasy' });
+                setMode('censored');
+                setModal({ show: true, title: 'New Story', message: 'Starting a new story.' });
+            };
+
+            const exportStory = () => {
+                const storyData = { history, settings, mode };
+                const dataStr = JSON.stringify(storyData, null, 2);
+                const blob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `dungeon_gpt_story_${Date.now()}.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            };
+
+            const importStory = (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+            
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const loadedData = JSON.parse(e.target.result);
+                        setHistory(loadedData.history || []);
+                        setSettings(loadedData.settings || { tone: 'Fantasy' });
+                        setMode(loadedData.mode || 'censored');
+                        setModal({ show: true, title: 'Story Imported', message: 'Story successfully imported from file.' });
+                    } catch (error) {
+                        setModal({ show: true, title: 'Import Error', message: 'Failed to import file. Please ensure it is a valid JSON.' });
+                    }
+                };
+                reader.readAsText(file);
+            };
+            
+            // Render the UI using React.createElement
+            if (!isAuthReady) {
+                return e('div', { className: 'flex items-center justify-center min-h-screen bg-gray-900' }, 
+                    e('div', { className: 'flex flex-col items-center' },
+                        e('div', { className: 'loader-circle w-12 h-12 border-4 border-t-4 border-gray-500 rounded-full animate-spin' }),
+                        e('p', { className: 'mt-4 text-gray-500' }, 'Loading...')
+                    )
+                );
+            }
+
+            return e('div', { className: 'flex flex-col h-screen w-full max-w-4xl mx-auto p-4 bg-gray-900 text-gray-200 antialiased' },
+                modal.show && e(Modal, { title: modal.title, message: modal.message, onClose: () => setModal({ show: false }), input: modal.input, onConfirm: modal.onConfirm }),
+                e('header', { className: 'flex-shrink-0 flex justify-between items-center py-4 border-b border-gray-800 mb-4' },
+                    e('h1', { className: 'text-3xl font-bold' }, 'Dungeon GPT'),
+                    e('div', { className: 'flex items-center space-x-2' },
+                        e('button', { onClick: newStory, className: 'px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50', disabled: isLoading }, 'New Story'),
+                        e('button', { onClick: saveStoryToFirestore, className: 'px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50', disabled: isLoading || !isAuthReady || history.length === 0 }, 'Save'),
+                        e('button', { onClick: loadStoryFromFirestore, className: 'px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors disabled:opacity-50', disabled: isLoading || !isAuthReady }, 'Load'),
+                        e('button', { onClick: exportStory, className: 'px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50', disabled: isLoading || history.length === 0 }, 'Export'),
+                        e('label', { className: 'cursor-pointer px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50', disabled: isLoading },
+                            'Import',
+                            e('input', { type: 'file', accept: '.json', className: 'hidden', onChange: importStory })
+                        )
+                    )
+                ),
+                e('main', { className: 'flex-grow overflow-y-auto px-4 py-2 space-y-4 mb-20 chat-container', ref: chatContainerRef },
+                    e('div', { className: 'p-4 bg-gray-800 rounded-lg shadow-inner mt-4 mb-4' },
+                        e('h3', { className: 'text-xl font-bold mb-2' }, 'Settings'),
+                        e('div', { className: 'grid grid-cols-1 sm:grid-cols-2 gap-4' },
+                            e('div', null,
+                                e('label', { htmlFor: 'mode', className: 'block text-sm font-medium text-gray-400' }, 'Response Mode'),
+                                e('select', {
+                                    id: 'mode',
+                                    className: 'mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-700 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md bg-gray-700 text-white',
+                                    value: mode,
+                                    onChange: (event) => setMode(event.target.value)
+                                },
+                                    e('option', { value: 'censored' }, 'Censored'),
+                                    e('option', { value: 'uncensored' }, 'Uncensored')
+                                )
+                            ),
+                            e('div', null,
+                                e('label', { htmlFor: 'tone', className: 'block text-sm font-medium text-gray-400' }, 'Tone'),
+                                e('select', {
+                                    id: 'tone',
+                                    className: 'mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 rounded-md bg-gray-700 text-white',
+                                    value: settings.tone,
+                                    onChange: (event) => setSettings({ ...settings, tone: event.target.value })
+                                },
+                                    e('option', { value: 'Fantasy' }, 'Fantasy'),
+                                    e('option', { value: 'Sci-Fi' }, 'Sci-Fi'),
+                                    e('option', { value: 'Horror' }, 'Horror')
+                                )
+                            )
+                        )
+                    ),
+                    history.length > 0 ? history.map((msg, index) => (
+                        e('div', { key: index, className: `flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}` },
+                            e('div', { className: `p-4 rounded-lg max-w-[85%] sm:max-w-[70%] transition-transform duration-300 ease-in-out transform hover:scale-105 shadow-lg ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-200'}` },
+                                e('p', { className: 'whitespace-pre-wrap' }, msg.text)
+                            )
+                        )
+                    )) : e('div', { className: 'text-center text-gray-500 mt-16' }, e('p', null, 'Begin your adventure by typing a prompt below!')),
+                    isLoading && e('div', { className: 'flex justify-center items-center py-4' }, e('div', { className: 'animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-gray-500' }))
+                ),
+                e('div', { className: 'fixed bottom-0 left-0 right-0 p-4 bg-gray-900 border-t border-gray-800 backdrop-blur-sm z-50' },
+                    e('div', { className: 'flex items-center space-x-4 max-w-4xl mx-auto' },
+                        e('textarea', {
+                            className: 'flex-grow p-3 rounded-lg bg-gray-800 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-200 resize-none overflow-hidden h-12',
+                            placeholder: 'Type your command...',
+                            value: prompt,
+                            onChange: (event) => {
+                                setPrompt(event.target.value);
+                                event.target.style.height = 'auto';
+                                event.target.style.height = event.target.scrollHeight + 'px';
+                            },
+                            onKeyDown: (event) => {
+                                if (event.key === 'Enter' && !event.shiftKey) {
+                                    event.preventDefault();
+                                    handleSendMessage();
+                                }
+                            },
+                            rows: '1',
+                            disabled: isLoading
+                        }),
+                        e('button', {
+                            className: 'px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+                            onClick: handleSendMessage,
+                            disabled: isLoading || !prompt.trim()
+                        }, 'Send')
+                    )
+                )
+            );
+        };
+        
+        // Mount the App component to the DOM
+        ReactDOM.render(e(App), document.getElementById('root'));
+    </script>
+</body>
+</html>
