@@ -1,8 +1,0 @@
-flask
-google-generativeai
-huggingface-hub
-requests
-python-dotenv
-loguru
-flask-cors
-llama-cpp-python
