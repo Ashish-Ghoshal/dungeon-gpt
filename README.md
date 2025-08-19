@@ -305,6 +305,7 @@ Congratulations! You are now ready to embark on your Dungeon GPT adventure local
 
 Dungeon GPT offers an intuitive chat interface for interactive storytelling. Here's a breakdown of its features, as seen in the live deployed version (e.g., at `https://dungeon-gpt-heroku-6eb1a27523a3.herokuapp.com/`).
 
+![alt text](screenshots/deploy_img1.PNG)
 Upon launching the application, you'll be presented with a dark-themed chat interface.
 
 *   **Starting and Continuing a Story:** At the bottom, a text input field allows you to type your commands or story prompts. Type your initial idea (e.g., "I want to write a story about a girl named Elle how like chocolate and candy") and press "Send" or Enter. The AI will then generate a continuation of your narrative, appearing as AI messages in the chat history above. You can keep typing and sending prompts to guide the story.
