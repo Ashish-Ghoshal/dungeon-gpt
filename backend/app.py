@@ -2,7 +2,8 @@ import os
 import logging
 from flask import Flask, send_from_directory, jsonify
 from flask_cors import CORS
-from api import create_api_blueprint
+#from api import create_api_blueprint
+from backend.api import create_api_blueprint
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
