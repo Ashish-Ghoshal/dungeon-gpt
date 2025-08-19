@@ -1,5 +1,5 @@
 # The import statement is changed to an absolute path from the root.
-from backend.constants import UNCECSCORED_LLM_PROMPT_TEMPLATE, CENCSORED_LLM_PROMPT_TEMPLATE
+from constants import UNCECSCORED_LLM_PROMPT_TEMPLATE, CENCSORED_LLM_PROMPT_TEMPLATE
 from google.generativeai.types import HarmBlockThreshold, HarmCategory
 import google.generativeai as genai
 import os

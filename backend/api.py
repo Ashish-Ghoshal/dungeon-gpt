@@ -3,8 +3,7 @@ import json
 import logging
 from flask import Flask, jsonify, request
 # Import the new functions from the updated llm.py
-from .llm import get_gemini_censored_response, get_gemini_uncensored_response, get_local_llm_response, llm
-
+from llm import get_gemini_censored_response, get_gemini_uncensored_response, get_local_llm_response, llm
 # Set up logging for the API module
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
