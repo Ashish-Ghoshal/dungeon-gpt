@@ -42,6 +42,10 @@ def create_app():
 
     return app
 
+# Added at module level to ensure the app is created when this module is imported.
+# This is necessary for Heroku to recognize the app.
+app = create_app()
+
 if __name__ == "__main__":
     # This block is for local development only and is ignored by Gunicorn on Heroku
     app = create_app()
