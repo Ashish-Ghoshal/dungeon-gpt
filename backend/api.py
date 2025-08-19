@@ -30,20 +30,25 @@ def create_api_blueprint(app: Flask):
                 return jsonify({'error': 'No conversation history provided.'}), 400
 
             logging.info(f"Received request for '{mode}' mode with history of {len(history)} turns.")
+            
+            # Convert history (array of messages) to a single prompt string
+            prompt = "\n".join([msg.get("content", "") for msg in history])
+
+
 
             response_text = ""
             if mode == 'censored':
                 logging.info("Using Gemini API for 'censored' mode.")
-                response_text = get_gemini_censored_response(history, settings)
+                response_text = get_gemini_censored_response(prompt)
             elif mode == 'uncensored':
                 # Check if the local model is loaded. If so, use it.
                 if llm is not None:
                     print("Using local model for uncensored mode.")
-                    response_text = get_local_llm_response(history, settings)
+                    response_text = get_local_llm_response(prompt)
                 else:
                     # If the local model is not loaded (e.g., in a deployed environment), use the Gemini fallback.
                     print("Local model not available. Using Gemini API as a fallback.")
-                    response_text = get_gemini_uncensored_response(history, settings)
+                    response_text = get_gemini_uncensored_response(prompt)
             else:
                 return jsonify({'error': 'Invalid mode specified.'}), 400
 
