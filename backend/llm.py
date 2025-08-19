@@ -1,18 +1,8 @@
-# No longer importing llama_cpp at the top
-from flask import jsonify
-from .constants import UNCECSCORED_LLM_PROMPT_TEMPLATE, CENCSORED_LLM_PROMPT_TEMPLATE
+# The import statement is changed to an absolute path from the root.
+from backend.constants import UNCECSCORED_LLM_PROMPT_TEMPLATE, CENCSORED_LLM_PROMPT_TEMPLATE
 from google.generativeai.types import HarmBlockThreshold, HarmCategory
 import google.generativeai as genai
 import os
-
-# Configure the Gemini API with the API key from environment variables
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-
-# Define the models
-# The models used are gemini-2.0-flash-preview-05-20 for uncensored and gemini-1.5-flash-latest for censored.
-# The censored model is more restrictive, the uncensored model is less restrictive.
-uncensored_llm = genai.GenerativeModel('gemini-2.0-flash-preview-05-20')
-censored_llm = genai.GenerativeModel('gemini-1.5-flash-latest')
 
 def get_gemini_censored_response(prompt):
     """Generates a censored response using the Gemini 1.5 Flash model."""
