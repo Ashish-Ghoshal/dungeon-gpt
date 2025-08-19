@@ -444,3 +444,10 @@ git push origin deploy_v4
 - Switch branches and test locally.
 - Pause Heroku with heroku ps:scale web=0 to avoid charges.
 - Resume with heroku ps:scale web=1 when ready.
+
+
+## switch on and off heroku app
+Off
+-  "C:\Program Files\Heroku\bin\heroku" ps:scale web=0
+On
+-  "C:\Program Files\Heroku\bin\heroku" ps:scale web=1
