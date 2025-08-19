@@ -1,53 +1,48 @@
 import os
 import logging
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, jsonify
 from flask_cors import CORS
-from dotenv import load_dotenv
 from .api import create_api_blueprint
+from dotenv import load_dotenv
 
-# Load environment variables from .env file for local development
+# Load environment variables from .env file
 load_dotenv()
 
-# Set up logging for the main application
+# Set up basic logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-# Get the directory where this script is located
-base_dir = os.path.dirname(os.path.abspath(__file__))
-# The frontend directory is the parent of the backend directory
-frontend_dir = os.path.join(base_dir, '..', 'frontend')
 
 def create_app():
     """
-    Factory function to create the Flask application instance.
+    Factory function to create the Flask application.
+
+    This function is used by Gunicorn to start the application.
+    It initializes the app, registers blueprints, and sets up CORS.
     """
-    app = Flask(__name__)
-    
-    # Enable CORS for the frontend
-    CORS(app)
-    
+    app = Flask(__name__, static_folder='../frontend')
+    CORS(app)  # Enable CORS for all routes
+
     # Register the API blueprint
-    api_blueprint = create_api_blueprint(app)
-    app.register_blueprint(api_blueprint, url_prefix='/api')
+    app.register_blueprint(create_api_blueprint(app), url_prefix='/api')
 
     @app.route('/')
-    def serve_index():
+    def serve_frontend():
         """
-        Serves the main index.html file from the frontend directory.
+        Serves the main frontend HTML file.
         """
-        return send_from_directory(frontend_dir, 'index.html')
+        logging.info("Serving frontend...")
+        return send_from_directory(app.static_folder, 'index.html')
 
     @app.route('/<path:path>')
     def serve_static(path):
         """
-        Serves other static files (like JS and CSS) from the frontend directory.
+        Serves other static files (CSS, JS, images, etc.).
         """
-        if path.startswith('static/'):
-            return send_from_directory(os.path.join(frontend_dir, 'static'), path[7:])
-        return send_from_directory(frontend_dir, path)
-    
-    logging.info("Flask application created and configured.")
+        return send_from_directory(app.static_folder, path)
+
     return app
 
-if __name__ == '__main__':
+if __name__ == "__main__":
+    # This block is for local development only and is ignored by Gunicorn on Heroku
     app = create_app()
-    app.run(debug=True)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=True)
