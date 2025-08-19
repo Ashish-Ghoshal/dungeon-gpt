@@ -431,3 +431,5 @@ The app will now be accessible at `http://127.0.0.1:8080` (or another port depen
 *   **"Authentication Error" when saving:** Ensure you have completed **Step 2: Configure Firebase Authentication** correctly. Check your browser's developer console for more specific error messages.
     
 *   **Backend API issues:** If the app is not generating responses, check that your Python backend is running and that the `gemini-pro` model is correctly configured with your API key.
+
+Again
