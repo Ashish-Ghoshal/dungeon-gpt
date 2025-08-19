@@ -85,7 +85,7 @@ const App = () => {
         }));
 
         try {
-            const isLocalDev = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+            const isLocalDev =  window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
             const baseUrl = isLocalDev ? 'http://127.0.0.1:5000' : 'https://dungeon-gpt-heroku-6eb1a27523a3.herokuapp.com';
 
             const response = await fetch(`${baseUrl}/api/generate`, {
