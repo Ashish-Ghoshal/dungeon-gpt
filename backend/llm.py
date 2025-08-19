@@ -4,8 +4,27 @@ from google.generativeai.types import HarmBlockThreshold, HarmCategory
 import google.generativeai as genai
 import os
 
+# --- IMPORTANT CORRECTION ---
+# This is the line that was missing. It configures the Gemini client
+# with the API key, which is securely loaded from an environment variable.
+# It's a best practice to handle sensitive data like API keys this way.
+try:
+    google_api_key = os.getenv("GOOGLE_API_KEY")
+    if not google_api_key:
+        raise ValueError("GOOGLE_API_KEY environment variable not set.")
+    genai.configure(api_key=google_api_key)
+    # The two models are initialized here, now that the API key is configured.
+    censored_llm = genai.GenerativeModel("gemini-1.5-flash")
+    uncensored_llm = genai.GenerativeModel("gemini-1.5-flash") # Renamed from "gemini-2.0-flash" for a working model name
+except Exception as e:
+    print(f"Error configuring Google Gemini API: {e}")
+    censored_llm = None
+    uncensored_llm = None
+
 def get_gemini_censored_response(prompt):
     """Generates a censored response using the Gemini 1.5 Flash model."""
+    if not censored_llm:
+        return "The Gemini AI is not configured. Please check your API key."
     try:
         response = censored_llm.generate_content(
             CENCSORED_LLM_PROMPT_TEMPLATE.format(prompt=prompt)
@@ -16,7 +35,9 @@ def get_gemini_censored_response(prompt):
         return "An error occurred with the censored AI. Please try again later."
 
 def get_gemini_uncensored_response(prompt):
-    """Generates a less-censored response using the Gemini 2.0 Flash model, with some safety features turned off."""
+    """Generates a less-censored response using the Gemini 1.5 Flash model, with some safety features turned off."""
+    if not uncensored_llm:
+        return "The Gemini AI is not configured. Please check your API key."
     safety_settings = {
         HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
         HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
@@ -53,7 +74,7 @@ def get_local_llm_response(prompt):
         llm = Llama(
             model_path=model_path,
             n_gpu_layers=-1,  # Offload all layers to the GPU
-            n_ctx=4096,      # Context window size
+            n_ctx=4096,       # Context window size
             verbose=False,
         )
 
