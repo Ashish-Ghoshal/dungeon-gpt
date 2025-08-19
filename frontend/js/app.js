@@ -26,13 +26,13 @@ const App = () => {
     useEffect(() => {
         // Your web app's Firebase configuration from firebase config dungeon-gpt-web.txt
         const firebaseConfig = {
-          apiKey: "AIzaSyAsXHDs6vzPsVIeGqbMO_Umk9ghLDAGw",
-          authDomain: "dungeon-gpt.firebaseapp.com",
-          projectId: "dungeon-gpt",
-          storageBucket: "dungeon-gpt.firebasestorage.app",
-          messagingSenderId: "860852884563",
-          appId: "1:860852884563:web:fa4691c0d2604e9a2522a6",
-          measurementId: "G-KZ1GDHFEE7"
+            apiKey: "AIzaSyAsXHDs6vzPsVIeGqbMO_Umk9ghLDAGw",
+            authDomain: "dungeon-gpt.firebaseapp.com",
+            projectId: "dungeon-gpt",
+            storageBucket: "dungeon-gpt.firebasestorage.app",
+            messagingSenderId: "860852884563",
+            appId: "1:860852884563:web:fa4691c0d2604e9a2522a6",
+            measurementId: "G-KZ1GDHFEE7"
         };
         const app = initializeApp(firebaseConfig);
         const firebaseAuth = getAuth(app);
@@ -85,10 +85,8 @@ const App = () => {
         }));
 
         try {
-            const isLocalDev = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
-            const baseUrl = isLocalDev ? 'http://127.0.0.1:5000' : 'https://your-deployed-backend-url.com';
-
-            const response = await fetch(`${baseUrl}/api/generate`, {
+            // Use a relative path so it works in both local and deployed environments
+            const response = await fetch('/api/generate', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -132,9 +130,6 @@ const App = () => {
 
         setIsLoading(true);
         try {
-            // Note: The `__app_id` global variable is not available in local environments.
-            // A static ID is used here for local development. You can replace this with
-            // a different static ID or a dynamic one if your setup changes.
             const appId = 'dungeon-gpt-web';
             const storiesRef = collection(db, `artifacts/${appId}/users/${userId}/stories`);
 
