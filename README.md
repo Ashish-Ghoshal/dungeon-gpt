@@ -432,4 +432,15 @@ The app will now be accessible at `http://127.0.0.1:8080` (or another port depen
     
 *   **Backend API issues:** If the app is not generating responses, check that your Python backend is running and that the `gemini-pro` model is correctly configured with your API key.
 
-Again
+Again'
+| git add .
+git commit -m "WIP: troubleshooting Heroku frontend/backend issues"
+git push origin deploy_v4
+|
+
+## Summary:
+
+- Push your changes to GitHub.
+- Switch branches and test locally.
+- Pause Heroku with heroku ps:scale web=0 to avoid charges.
+- Resume with heroku ps:scale web=1 when ready.
